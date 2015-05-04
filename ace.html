@@ -1,0 +1,44 @@
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <title>ACE and D3</title>
+  </head>
+  <body>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.1.9/ace.js" type="text/javascript" charset="utf-8"></script>
+  <script>
+
+      var w = window.innerWidth,
+          h = window.innerHeight;
+       
+      var svg = d3.select('body').append('svg')
+          .attr('width', w)
+          .attr('height', h);
+
+      var group = svg.append("g");
+
+      var radius = w/8;
+
+      var circle = group.append("circle")
+                    .attr("cx",w/2)
+                    .attr("cy",h/2)
+                    .attr("r",radius)
+                    .attr("fill","black");
+
+      group.append('foreignObject')
+        .attr("x",w/2 - radius/2)
+        .attr("y",h/2 - radius/2)
+        .attr("width",radius)
+        .attr("height",radius)
+        .style("background-color","red")
+       .append("xhtml:div")
+        .attr("id","editor")
+        .attr('style','width:100%;height:100%');
+      
+      var editor = ace.edit("editor");
+      editor.setTheme("ace/theme/monokai");
+      editor.getSession().setMode("ace/mode/javascript");
+
+  </script>
+  </body>
+  </html>

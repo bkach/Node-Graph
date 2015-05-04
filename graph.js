@@ -75,8 +75,7 @@ var draw = function() {
           
 
           dragLine.classed('hidden',false)
-            .attr('d','M' + d.location.x + ',' + d.location.y + 
-              'L' + d3.event.x + ',' + d3.event.y);
+            .attr('d','M' + d.location.x + ',' + d.location.y + 'L' + d3.event.x + ',' + d3.event.y);
           return false;
         } 
         else
@@ -88,10 +87,8 @@ var draw = function() {
         }
       })
       .on("dragend", function(d){
-        if(!d3.event.sourceEvent.shiftKey){
-          d.location.x = resultantX;
-          d.location.y = resultantY;
-        }
+        d.location.x = resultantX;
+        d.location.y = resultantY;
         d3.select(this).classed("dragging", false);
       });
 
