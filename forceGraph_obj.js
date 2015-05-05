@@ -1,9 +1,18 @@
 // Constants
 var debug = true;
+//var debug = true;    
 
 var width = window.innerWidth,
     height = window.innerHeight,
-    nodeRadius = 60
+    nodeRadius = height / 20,
+    linkWidth = 2,
+    nodeStrokeWidth = nodeRadius/10,
+    nodeSelectedStrokeWidth = nodeRadius/5,
+    arrowWidth = 5,
+    arrowLength = 5,
+    arrowOffset = nodeRadius + 3,
+    forceCharge = -100,
+    forceLinkDistance = width/5,
     gooGreen = 'rgb(145,207,75)',
     gooRed = 'rgb(247,97,98)',
     gooLightGrey = 'rgb(247,247,247)',
@@ -28,24 +37,36 @@ var nodeElement,
 var graphData = {
   'nodes' : [
     // x, y, z
-    {'x' : 0 + nodeRadius + 10, 'y' : height/3, 'fixed' : true  , 'type' : 'input', 'id': 'x'},
-    {'x' : 0 + nodeRadius + 10, 'y' : height/2, 'fixed' : true  , 'type' : 'input', 'id': 'y'},
-    {'x' : 0 + nodeRadius + 10, 'y' : 2*height/3, 'fixed' : true, 'type' : 'input', 'id': 'z'},
-    // function
-    {'x' : width/2, 'y' : height/2, 'type' : 'fn', 'id': 'fn', 'code' : 'fn code'},
+    {'x' : 0 + nodeRadius + 10, 'y' : height/3, 
+      'fixed' : true  , 'type' : 'ExternalInput', 'id': 'x'},
+    {'x' : 0 + nodeRadius + 10, 'y' : height/2, 
+      'fixed' : true  , 'type' : 'ExternalInput', 'id': 'y'},
+    {'x' : 0 + nodeRadius + 10, 'y' : 2*height/3, 
+      'fixed' : true, 'type' : 'ExternalInput', 'id': 'z'},
     // out
-    {'x' : width - (nodeRadius + 10), 'y' : height/2, 'fixed' : true, 'type' : 'output', 'id': 'out'}
+    {'x' : width - (nodeRadius + 10), 'y' : height/2, 
+      'fixed' : true, 'type' : 'output', 'id': 'out'},
+    // function
+    {'x' : width/2, 'y' : height/2, 
+      'type' : 'fn', 'id': 'fn', 'code' : 'fn code'},
   ]};
 
 graphData.links = 
    [
-    {source : graphData.nodes[0], target: graphData.nodes[3]},
-    {source : graphData.nodes[1], target: graphData.nodes[3]},
-    {source : graphData.nodes[2], target: graphData.nodes[3]},
+    {source : graphData.nodes[0], target: graphData.nodes[4]},
+    {source : graphData.nodes[1], target: graphData.nodes[4]},
+    {source : graphData.nodes[2], target: graphData.nodes[4]},
+    {source : graphData.nodes[4], target: graphData.nodes[3]},
   ];
 
 // The Graph Object
 function Graph(){
+
+  var instance;
+
+  this.init = function(){
+    instance = this;
+  }
 
   var spaceDown = false,
       altDown = false,
@@ -64,9 +85,7 @@ function Graph(){
       'fn', 
       'code': id + ' code' });
     update();
-    if (debug){
-      console.log('Node ' + id + ' added');
-    }
+    if (debug){ console.log('Node ' + id + ' added'); }
   };
 
   this.addLink = function (source,target){
@@ -76,27 +95,23 @@ function Graph(){
       if(graphData.links[i].source.id == source &&
          graphData.links[i].target.id == target){
           duplicate = true;
-          if (debug){
-            console.log('Duplicate link ' + source + ' - ' + target + 'not added');
-          }
+          if (debug){ console.log('Duplicate link ' + source + ' - ' + target + 'not added'); }
       }
     }
     if(!duplicate){
       graphData.links.push({'source': findNode(source), 'target': findNode(target)});
-      if (debug){
-        console.log('Link ' + source + ' - ' + target + ' added');
-      }
+      if (debug){ console.log('Link ' + source + ' - ' + target + ' added'); }
     }
     update();
   };
 
   var removeNode = function (id) {
-      console.log('Removing ' + id);
+      dbg('Removing ' + id);
       var i = 0;
       var n = findNode(id);
       while (i < links.length) {
           if ((links[i]['source'] == n) || (links[i]['target'] == n)) {
-              console.log('\tRemoving ' + links[i]['source'].id + ' - ' + links[i]['target'].id);
+              dbg('\tRemoving ' + links[i]['source'].id + ' - ' + links[i]['target'].id);
               links.splice(i, 1);
           }
           else i++;
@@ -106,7 +121,7 @@ function Graph(){
   };
 
   var removeLink = function (source, target) {
-      console.log('Removing ' + source + ' - ' + target);
+      dbg('Removing ' + source + ' - ' + target);
       for (var i = 0; i < links.length; i++) {
           if (links[i].source.id == source && links[i].target.id == target) {
               links.splice(i, 1);
@@ -161,7 +176,6 @@ function Graph(){
     }
   }
 
-
   // Behavior dictating a drawn link
   var dragLineBehavior = function(){
     return d3.behavior.drag()
@@ -173,7 +187,7 @@ function Graph(){
              .attr('x2',d.x)
              .attr('y2',d.y)
              .attr('stroke', linkColor)
-             .attr('stroke-width', 2)
+             .attr('stroke-width', linkWidth)
              .attr('marker-end', 'url(#endDraw)');
         })
         .on('drag', function(){
@@ -239,6 +253,10 @@ function Graph(){
         }
       }
     }
+    // a - add node
+    if(d3.event.keyCode == 65){
+      instance.addNode("newNode " + Date.now());
+    }
   }
 
   var dragstart = function(d){
@@ -254,19 +272,16 @@ function Graph(){
   }
   
   var deselectAll = function(){
-
     d3.selectAll('.node')
       .classed('selected',false)
       .attr('stroke', nodeStrokeColor)
-      .attr('stroke-width',3);
+      .attr('stroke-width', nodeStrokeWidth);
 
     d3.selectAll('.link')
       .classed('selected',false)
       .style('stroke', linkColor);
 
-    if(debug){
-      console.log("Deselecting All");
-    }
+    dbg("Deselecting All");
   }
 
   var isSelected = function(element){
@@ -286,12 +301,12 @@ function Graph(){
       deselectAll();
     }
     if(notSelected){
-      if(debug){ console.log("Selecting " + element[0][0].id); }
+      dbg("Selecting " + element[0][0].id);
       if (element[0][0].classList[0] == 'node')
       {
         element 
           .attr('stroke', selectedColor)
-          .attr('stroke-width',10)
+          .attr('stroke-width', nodeSelectedStrokeWidth)
           .classed('selected',true);
       }
       else
@@ -321,29 +336,30 @@ function Graph(){
     }
   }
 
-  // Zooms to a specified translation vector and scale
+  // Zooms to a specified translation vector and scale, and subsequently calls the callback
   var programmaticZoom = function(translate,scale,duration,callback){
-    if (debug){ console.log("Zooming to t:" + translate + " s:" + scale) }
+    dbg("Zooming to t:" + translate + " s:" + scale);
     zoomListener.translate(translate).scale(scale);
     zoomListener.event(vis.transition().duration(duration).each('end',callback));
   }
 
   // Double click on background to remove container and reset viewport
   var dblclickBackground = function(d){
-    var zoomDuration = 500;
+    var zoomDuration = 500,
+        editor;
 
-    if(d3.select('#editorContainer')[0][0]){
-      d3.select('#editorContainer') 
+    if(d3.select('#editor')[0][0]){
+      editor = d3.select('#editor');
+      editor
         .transition()
-        .attr('x',width/2)
-        .attr('y',height/2)
-        .attr('width',0)
-        .attr('height',0)
-        .ease('exp')
-        .duration(zoomDuration)
-        .each('end', function(){
-          d3.select(this).remove()
-          programmaticZoom([0,0],1,zoomDuration,addListeners);
+        .style('margin-top', '-50px')
+        .style('margin-left', '-50px')
+        .style('width', 0 + 'px')
+        .style('height', 0 + 'px')
+        .each('end',function(){
+          editor.remove(); 
+          programmaticZoom([0,0],1,zoomDuration,null);
+          addListeners();
         });
     }
     else
@@ -355,63 +371,73 @@ function Graph(){
 
   // Double click on node to zoom to node
   var dblclickNode = function(d) {
-    var dx = 120,
-        dy = 120,
+    var dx = nodeRadius * 2,
+        dy = nodeRadius * 2,
         scale = .9 / Math.max(dx/width,dy/height),
         translate = [width / 2 - scale * d.x, height / 2 - scale * d.y]
         zoomDuration = 500;
-        editorDuration = 500;
    
-    // Zoom to node
-    programmaticZoom(translate,scale,zoomDuration,function(){});
-
     if (d.type == 'fn'){
-      setUpEditor(d);
+      deselectAll();
+      removeListeners();
+      programmaticZoom(translate,scale,zoomDuration,setUpEditor(d));
+    }
+    else{
+      dbg("Not a function, zoom canceled");
     }
   }
 
   // Create the Ace editor
   var setUpEditor = function(d){
-    var aceEditor;
+    var tRad = Math.min(width,height) / 2,
+        editorDuration = 500;
+
+    dbg('add editor');
     var editor =
-      svg.append('foreignObject')
-        .attr('id','editorContainer')
-        .attr('x',width/2)
-        .attr('y',height/2)
-        .attr('width',0)
-        .attr('height',0);
-
-    editor
-        .transition()
-        .attr('x',width/2 - width/4)
-        .attr('y',height/2 - width/4)
-        .attr('width', width/2)
-        .attr('height', height/2)
-        .delay(zoomDuration)
-        .duration(editorDuration)
-        .ease('bounce')
-        .each('start',function(){
-
-          removeListeners();
-
-          // Add Editor
-          aceEditor = ace.edit('editor');
-          aceEditor.setTheme('ace/theme/monokai');
-          aceEditor.getSession().setMode('ace/mode/glsl');
-        })
-        .each('end',function(){
-          // Add Text
-          aceEditor.insert(d.code);
-          aceEditor.resize();
-          aceEditor.getSession().on('change', function(e){
-            d.code = aceEditor.getValue();
-          });
+      d3.select('body')
+      //.insert('xhtml:div',':first-child')
+      .append('xhtml:div')
+        .attr('id','editor')
+        .style('position','absolute')
+        .style('top', '50%')
+        .style('left', '50%')
+        .style('margin-top', '-50px')
+        .style('margin-left', '-50px')
+        .style('width', 0 + 'px')
+        .style('height', 0 + 'px')
+        .style('z-index', 9999)
+      .transition()
+      .ease('bounce')
+      .delay(500)
+      .duration(editorDuration)
+        .style('margin-top', '-' + tRad/2 + 'px')
+        .style('margin-left', '-' + tRad/2 + 'px')
+        .style('width', tRad + 'px')
+        .style('height', tRad + 'px')
+      .each('start',function(){
+        aceEditor = ace.edit('editor');
+        aceEditor.setTheme('ace/theme/monokai');
+        aceEditor.getSession().setMode('ace/mode/glsl');
+        aceEditor.getSession().setUseWrapMode(true);
+        aceEditor.getSession().on('change', function(e){
+          d.code = aceEditor.getValue();
         });
+        aceEditor.$blockScrolling = Infinity;
+      })
+      .each('end',function(){
+        aceEditor.insert(d.code);
+        aceEditor.setTheme('ace/theme/monokai');
+        aceEditor.getSession().setMode('ace/mode/glsl');
+        aceEditor.getSession().setUseWrapMode(true);
+        aceEditor.getSession().on('change', function(e){
+          d.code = aceEditor.getValue();
+        });
+      });
+  }
 
-    editor
-     .append('xhtml:div')
-      .attr('id','editor')
-      .attr('style','width:100%;height:100%');
+  // Debug print
+  var dbg = function(s){
+    if(debug){ console.log('debugger: ' + s); }
   }
 
   // Adding and removing listeners is essential to making sure
@@ -419,6 +445,7 @@ function Graph(){
 
   var addListeners = function(){
     // Add node listeners
+    dbg('listeners added');
     nodeElement
         .on('click', selectClick)
         .on('dblclick', dblclickNode)
@@ -432,6 +459,7 @@ function Graph(){
 
   var removeListeners = function(){
     // Remove node listeners
+    dbg('listeners removed');
     d3.selectAll('.node') 
       .on('click', null)
       .on('dblclick', null)
@@ -487,7 +515,6 @@ function Graph(){
     };
   }
 
-
   // Set up the D3 visualization
 
   // Creates the graph
@@ -495,8 +522,8 @@ function Graph(){
       .size([width, height])
       .nodes(graphData.nodes)
       .links(graphData.links)
-      .linkDistance(width/3)
-      .charge(-200);
+      .linkDistance(forceLinkDistance)
+      .charge(forceCharge);
 
   // Adds the drag functionality
   var drag = force.drag()
@@ -518,18 +545,19 @@ function Graph(){
       .on('dblclick.zoom', null)
 
   // Arrow definitions (to be used on nodes)
+      
   var defs = svg.append('defs');
   defs
     .append('marker')
       .attr('id', 'endNode')
       .attr('viewBox', '0 -5 10 10')
-      .attr('refX', nodeRadius + 1)
+      .attr('refX', arrowOffset)
       .attr('refY', 0)
       .attr('markerWidth', 6)
       .attr('markerHeight', 6)
       .attr('orient', 'auto')
     .append('path')
-      .attr('d','M 0,-5 L 10,0 L 0,5')
+      .attr('d','M 0,-' + arrowWidth/2 + 'L' + arrowLength + ',0 L 0,' + arrowWidth/2)
       .style('stroke', arrowColor)
       .style('fill', arrowColor);
  
@@ -587,7 +615,7 @@ function Graph(){
         .enter().append('line')
         .attr('class', 'link')
         .style('stroke', linkColor)
-        .style('stroke-width', 2)
+        .style('stroke-width', linkWidth)
         .on('click',selectClick)
         .style('marker-end', 'url(#endNode)');
 
@@ -604,7 +632,7 @@ function Graph(){
         .attr('cy' , function(d) { return d.y; })
         .attr('r', nodeRadius)
         .attr('stroke', nodeStrokeColor)
-        .attr('stroke-width', 3)
+        .attr('stroke-width', nodeStrokeWidth)
         .on('click', selectClick)
         .on('dblclick', dblclickNode)
         .call(drag);
@@ -624,7 +652,7 @@ function Graph(){
           .attr('cy' , function(d) { return d.y; })
           .attr('id', function(d) { return d.id; })
           .attr('fill',function(d) {
-            if(d.type == 'input'){ return inputColor; }
+            if(d.type == 'ExternalInput'){ return inputColor; }
             if(d.type == 'output'){ return outputColor; }
             else{ return functionColor; }
           })
@@ -641,21 +669,22 @@ function Graph(){
 
     // Restart force layout
     force
-      .linkDistance(width/3)
-      .charge(-200)
+      .linkDistance(forceLinkDistance)
+      .charge(forceCharge)
       .start();
 
   };
 
   update();
-
+  this.init();
 }
 
 // Some test data
+//shaderBits.buildShader({"test"},{"test"});
 var graph = new Graph();
-graph.addNode('fn2');
-graph.addNode('fn3');
-graph.addLink('fn','fn2');
-graph.addLink('fn','fn3');
-graph.addLink('fn2','out');
-graph.addLink('fn3','out');
+//graph.addNode('fn2');
+//graph.addNode('fn3');
+//graph.addLink('fn','fn2');
+//graph.addLink('fn','fn3');
+//graph.addLink('fn2','out');
+//graph.addLink('fn3','out');
