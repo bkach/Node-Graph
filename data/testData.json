@@ -84,7 +84,15 @@
          ],
          "outputs":[
             {
-               "name":"result",
+               "name":"result1",
+               "type":"float"
+            },
+            {
+               "name":"result2",
+               "type":"float"
+            },
+            {
+               "name":"result3",
                "type":"float"
             }
          ]

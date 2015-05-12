@@ -62,47 +62,77 @@ d3.json('/data/testData.json',function(error,json){
         aceEditor,
         lastDragPosition,
         instance,
-        mouse = [0,0];
+        mouse = [0,0]
+        currentLocation = {'t': [0,0], 's':1};
+        lastLocation = {'t': [0,0], 's':1};
 
     this.init = function(){
       instance = this;
     }
 
     this.addNode = function(id){
-      graphData.nodes.push(
-      {
-         "x" : mouse[0],
-         "y" : mouse[1],
-         "id":id,
-         "fixed":false,
-         "type":"fn",
-         "inputs":[{
-             "name":"in",
-             "type":"float"
-         }],
-         "outputs":[{
-               "name":"out",
-               "type":"float"
-        }],
-         "code" : "gl_FragColor = vec3(var1,var2,var3);"
-      });
+      var node =
+        {
+           "x" : mouse[0],
+           "y" : mouse[1],
+           "id":id,
+           "fixed":false,
+           "type":"fn",
+           "inputs":[],
+           "outputs":[],
+           "code" : "gl_FragColor = vec3(var1,var2,var3);"
+        };
+      for(var i = 0; i < Math.floor((3*Math.random())+1); i++){
+        node.inputs.push({
+          'name' : i,
+          'type' : 'float'
+        })
+      }
+      for(var i = 0; i < Math.floor((3*Math.random())+1); i++){
+        node.outputs.push({
+          'name' : i,
+          'type' : 'float'
+        })
+      }
+      graphData.nodes.push(node);
       update();
       dbg('Node ' + id + ' added');
     };
 
-    this.addLink = function (source,target){
+    this.addLink = function (source,target,sourceOutput,targetInput){
 
       // TODO: bug, duplicate links
-      
-      for (var i in graphData.links){
-        graphData.links.push(
-            {'source': findNode(source), 
-             'target': findNode(target),
-             'sourceOutput':0,
-             'targetInput':0
-            });
-        dbg('Link ' + source + ' - ' + target + ' added');
-        update();
+      var dup = false;
+      if(source == target)
+      {
+        dbg('Links cannot be added to the same element');
+        dup = true;
+      }
+      else
+      {
+        for(var i in graphData.links){
+          lnk = graphData.links[i];
+          if((lnk.source == source && 
+              lnk.sourceOutput == sourceOutput)
+              ||
+              (lnk.target == target && 
+              lnk.targetInput == targetInput))
+          {
+            dbg('duplicate link, not added')
+            dup = true;
+          }
+        }
+        if(!dup) 
+        {
+          graphData.links.push(
+              {'source': source, 
+               'target': target,
+               'sourceOutput':sourceOutput,
+               'targetInput':targetInput
+              });
+          dbg('Link ' + source.id + ' - ' + target.id + ' (' + sourceOutput + '-' + targetInput + ') added');
+          update();
+        }
       }
     };
 
@@ -221,7 +251,7 @@ d3.json('/data/testData.json',function(error,json){
       }
       // a - add node
       if(d3.event.keyCode == 65){
-        instance.addNode("newNode " + Date.now());
+        instance.addNode("newNode" + Date.now());
       }
       if(d3.event.keyCode == 83){
         nodes[0].inputs.push(
@@ -231,6 +261,10 @@ d3.json('/data/testData.json',function(error,json){
             }
         );
         update();
+      }
+      if(d3.event.keyCode)
+      {
+        console.log(graphData);
       }
     }
 
@@ -306,7 +340,6 @@ d3.json('/data/testData.json',function(error,json){
 
     // Zooms to a specified translation vector and scale, and subsequently calls the callback
     var programmaticZoom = function(translate,scale,duration,callback){
-      dbg("Zooming to t:" + translate + " s:" + scale);
       zoomListener.translate(translate).scale(scale);
       zoomListener.event(vis.transition().duration(duration).each('end',callback));
     }
@@ -326,13 +359,13 @@ d3.json('/data/testData.json',function(error,json){
           .style('height', 0 + 'px')
           .each('end',function(){
             editor.remove(); 
-            programmaticZoom([0,0],1,zoomDuration,null);
+            programmaticZoom(lastLocation.t,lastLocation.s,zoomDuration,null);
             addListeners();
           });
       }
       else
       {
-        programmaticZoom([0,0],1,zoomDuration,null);
+        programmaticZoom(lastLocation.t,lastLocation.s,zoomDuration,null);
       }
 
     }
@@ -348,6 +381,10 @@ d3.json('/data/testData.json',function(error,json){
       if (d.type == 'fn'){
         deselectAll();
         removeListeners();
+
+        lastLocation.t = currentLocation.t;
+        lastLocation.s = currentLocation.s;
+
         programmaticZoom(translate,scale,zoomDuration,setUpEditor(d));
       }
       else{
@@ -455,6 +492,8 @@ d3.json('/data/testData.json',function(error,json){
     var rescale = function(){
       trans = d3.event.translate;
       scale = d3.event.scale;
+      currentLocation.t = trans;
+      currentLocation.s = scale;
 
       vis.attr('transform','translate(' + trans + ')' + ' scale(' + scale + ')');
     }
@@ -487,17 +526,83 @@ d3.json('/data/testData.json',function(error,json){
         });
       };
     }
+    
+    // Behavior for drawing line
+    var circleAbsPosition;
+    var drawLine =
+      d3.behavior.drag()
+        .on('dragstart',function(d){
+          d3.event.sourceEvent.stopPropagation();
+          force.stop();
+          circle = {'x':parseInt(this.getAttribute('cx')),
+                    'y':parseInt(this.getAttribute('cy'))};
+          parent = {'x': d3.select('#' + d.parent.id)[0][0].__data__.x,
+                    'y': d3.select('#' + d.parent.id)[0][0].__data__.y};
+          circleAbsPosition = {'x' : circle.x + parent.x,
+                            'y' : circle.y + parent.y};
+          allLinks.append('line')
+            .attr('class','draw')
+            .attr('x1',circleAbsPosition.x)
+            .attr('y1',circleAbsPosition.y)
+            .attr('x2',circleAbsPosition.x)
+            .attr('y2',circleAbsPosition.y)
+            .attr('stroke', linkColor)
+            .attr('stroke-width', linkWidth)
+            .style('marker-start', 'url(#start)')
+            .style('marker-end', 'url(#end)');
+        })
+        .on('drag',function(d){
+          lastDragPosition = {'x':d3.event.x + d3.select('#' + d.parent.id)[0][0].__data__.x,
+                              'y':d3.event.y + d3.select('#' + d.parent.id)[0][0].__data__.y};
+          d3.select('.draw')
+            .attr('x2', lastDragPosition.x)
+            .attr('y2', lastDragPosition.y);
+        })
+        .on('dragend',function(d){
+          d3.select('.draw').remove();
+          d3.selectAll('.nodeGroup').selectAll('.input,.output').each(
+              function(){
+                c = 
+                  {
+                    x: parseInt(this.getAttribute('cx')) +
+                        findNode(this.parentElement.id).x,
+                    y: parseInt(this.getAttribute('cy')) +
+                        findNode(this.parentElement.id).y,
+                    r: parseInt(this.getAttribute('r'))
+                  };
 
-    // Set up the D3 visualization
+                if(pointWithinCircle(lastDragPosition,c)){
+                  if(this.getAttribute('class') == 'input')
+                  {
+                    source = d.parent;
+                    sourceOutput = d.index;
+                    target = findNode(this.parentElement.getAttribute('id'));
 
-    // Creates the graph
-    var force = d3.layout.force()
-        .size([width, height])
-        .nodes(graphData.nodes)
-        .links(graphData.links)
-        .linkDistance(forceLinkDistance)
-        .charge(forceCharge);
-
+                    var targetInput;
+                    for (i in target.inputs){
+                      if(target.inputs[i].name == this.id.split('.')[0])
+                        targetInput = i;
+                    }
+                    instance.addLink(
+                      source,
+                      target,
+                      sourceOutput,
+                      targetInput)
+                  }
+                  else
+                    dbg("Cannot connect output to output");
+                }
+              }
+          );
+          force.start();
+        });
+        
+    // Check the given point is within a circle
+    var pointWithinCircle = function(p,c){
+      var d = Math.sqrt(Math.pow(c.x-p.x,2) + Math.pow(c.y-p.y,2));
+      return (d < c.r) ? true : false;
+    }
+    
     // Adds the drag functionality
     var forceDrag =
       d3.behavior.drag()
@@ -530,6 +635,18 @@ d3.json('/data/testData.json',function(error,json){
             
           force.start();
         });
+
+    // Set up the D3 visualization
+
+    // Creates the graph
+    var force = d3.layout.force()
+        .size([width, height])
+        .nodes(graphData.nodes)
+        .links(graphData.links)
+        .linkDistance(forceLinkDistance)
+        .charge(forceCharge);
+
+
 
     // References the data
     var nodes = force.nodes(),
@@ -662,6 +779,7 @@ d3.json('/data/testData.json',function(error,json){
                 obj = 
                   { 'total' : d.inputs.length,
                     'index' : i,
+                    'parent' : d,
                     'name' : input.name,
                     'type' : input.type,
                     'io'   : 'input'};
@@ -676,6 +794,7 @@ d3.json('/data/testData.json',function(error,json){
             .attr('fill', inputColor)
             .attr('stroke', nodeStrokeColor)
             .attr('stroke-width', nodeStrokeWidth);
+            //.call(drawLine);
 
       // Add output group
       nodeGroup.selectAll('.outputGroup')
@@ -687,6 +806,7 @@ d3.json('/data/testData.json',function(error,json){
                 obj = 
                   { 'total' : d.outputs.length,
                     'index' : i,
+                    'parent' : d,
                     'name' : output.name,
                     'type' : output.type,
                     'io'   : 'output'};
@@ -700,7 +820,8 @@ d3.json('/data/testData.json',function(error,json){
             .attr('r', ioRadius)
             .attr('fill', outputColor)
             .attr('stroke', nodeStrokeColor)
-            .attr('stroke-width', nodeStrokeWidth);
+            .attr('stroke-width', nodeStrokeWidth)
+            .call(drawLine);
 
 
       // Remove node group element - to remove inputs,node, and outputs
