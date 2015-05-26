@@ -1,7 +1,17 @@
+Array.prototype.contains = function(obj) {
+    var i = this.length;
+    while (i--) {
+        if (this[i] === obj) {
+            return true;
+        }
+    }
+    return false;
+}
+
 d3.json('/data/testData.json',function(error,json){
   // Constants
-  var debug = true;
-  //var debug = false;    
+  //var debug = true;
+  var debug = false;    
 
   var width = window.innerWidth,
       height = window.innerHeight,
@@ -70,33 +80,10 @@ d3.json('/data/testData.json',function(error,json){
       instance = this;
     }
 
-    this.addNode = function(id){
-      var node =
-        {
-           "x" : mouse[0],
-           "y" : mouse[1],
-           "id":id,
-           "fixed":false,
-           "type":"fn",
-           "inputs":[],
-           "outputs":[],
-           "code" : "gl_FragColor = vec3(var1,var2,var3);"
-        };
-      for(var i = 0; i < Math.floor((3*Math.random())+1); i++){
-        node.inputs.push({
-          'name' : i,
-          'type' : 'float'
-        })
-      }
-      for(var i = 0; i < Math.floor((3*Math.random())+1); i++){
-        node.outputs.push({
-          'name' : i,
-          'type' : 'float'
-        })
-      }
+    this.addNode = function(node){
       graphData.nodes.push(node);
       update();
-      dbg('Node ' + id + ' added');
+      dbg('Node ' + node.id + ' added');
     };
 
     this.addLink = function (source,target,sourceOutput,targetInput){
@@ -131,6 +118,7 @@ d3.json('/data/testData.json',function(error,json){
                'targetInput':targetInput
               });
           dbg('Link ' + source.id + ' - ' + target.id + ' (' + sourceOutput + '-' + targetInput + ') added');
+          tick();
           update();
         }
       }
@@ -217,6 +205,13 @@ d3.json('/data/testData.json',function(error,json){
 
 
     var keyup = function(){
+      if(d3.event.keyCode == 79)
+      {
+        console.log("Nodes:");
+        console.log(nodes);
+        console.log("Links:");
+        console.log(links);
+      }
       // Space
       if (d3.event.keyCode == 32){
         spaceDown = false;
@@ -251,20 +246,99 @@ d3.json('/data/testData.json',function(error,json){
       }
       // a - add node
       if(d3.event.keyCode == 65){
-        instance.addNode("newNode" + Date.now());
+        var node = 
+        {
+             "x" : mouse[0],
+             "y" : mouse[1],
+             "id":"newNode" + Date.now(),
+             "fixed":false,
+             "type":"fn",
+             "inputs":[],
+             "outputs":[],
+             "code" : "gl_FragColor = vec3(var1,var2,var3);"
+        };
+        for(var i = 0; i < Math.floor((3*Math.random())+1); i++){
+          node.inputs.push({
+            'name' : i,
+            'type' : 'float'
+          })
+        }
+        for(var i = 0; i < Math.floor((3*Math.random())+1); i++){
+          node.outputs.push({
+            'name' : i,
+            'type' : 'float'
+          })
+        }
+        instance.addNode(node);
       }
-      if(d3.event.keyCode == 83){
-        nodes[0].inputs.push(
-            {
-               "name":"inx",
-               "type":"float"
-            }
-        );
-        update();
-      }
-      if(d3.event.keyCode)
+      // g - group nodes, remove all inner nodes
+      //     and create new node
+      if(d3.event.keyCode == 71)
       {
-        console.log(graphData);
+        dbg('Grouping');
+        var selEl = getSelected();
+        var outerSources = [];
+        var outerTargets = [];
+        selEl = selEl.map(function(e,i){ return e.id; });
+        i = 0;
+        while( links[i] != undefined )
+        {
+          if(selEl.contains(links[i].source.id) && selEl.contains(links[i].target.id)){
+            removeLink(links[i].source.id, links[i].target.id, links[i].sourceOutput, links[i].targetInput);
+          }
+          else if(selEl.contains(links[i].source.id)){
+            if(!outerTargets.contains({'target': links[i].target, 'targetInput' : links[i].targetInput}))
+            {
+              outerTargets.push({'target': links[i].target, 'targetInput' : links[i].targetInput});
+            }
+            i++;
+          }
+          else if(selEl.contains(links[i].target.id)){
+            if(!outerSources.contains({'source': links[i].source, 'sourceOutput' : links[i].sourceOutput}))
+            {
+              outerSources.push({'source': links[i].source, 'sourceOutput' : links[i].sourceOutput});
+            }
+            i++;
+          }
+        }
+
+        // Remove Node
+        selEl.forEach(function(el,i){
+          removeNode(el);
+        });
+
+        instance.addNode({
+             "x" : mouse[0],
+             "y" : mouse[1],
+             "id":"group" + Date.now(),
+             "fixed":false,
+             "type":"fn",
+             "inputs": 
+               outerSources.map(function(s,i){
+                 return { 'name' : 'input' + i, 'type' : 'float' };
+               }),
+             "outputs": 
+               outerTargets.map(function(t,i){
+                 return { 'name' : 'output' + i, 'type' : 'float' };
+               }),
+             "code" : "Grouped Element"
+          });
+
+        outerTargets.forEach(function(t,i){
+          instance.addLink(
+            nodes[nodes.length - 1],
+            t.target,
+            i,
+            t.targetInput)
+        })
+
+        outerSources.forEach(function(t,i){
+          instance.addLink(
+            t.source,
+            nodes[nodes.length - 1],
+            t.sourceOutput,
+            i)
+        })
       }
     }
 
@@ -679,7 +753,7 @@ d3.json('/data/testData.json',function(error,json){
       .append('circle')
         .attr('cx',0)
         .attr('cy',0)
-        .attr('r',10)
+        .attr('r',6)
         .style('stroke', arrowColor)
         .style('fill', arrowColor);
 
@@ -689,8 +763,8 @@ d3.json('/data/testData.json',function(error,json){
         .attr('id', 'start')
         .attr('viewBox', '-5 -5 10 10')
         .attr('refX', -2)
-        .attr('markerWidth', 8)
-        .attr('markerHeight', 8)
+        .attr('markerWidth', 6)
+        .attr('markerHeight', 6)
         .attr('orient', 'auto')
       .append('path')
         .attr('d','M 0,0 m -5,-5 L 5,0 L -5,5 Z')
@@ -770,31 +844,33 @@ d3.json('/data/testData.json',function(error,json){
             .on('dblclick', dblclickNode)
 
       // Add Input group
-      nodeGroup.selectAll('.inputGroup') 
-          .data(function(d,i){
-            // Extra information is needed to calculate
-            // where the inputs should be placed
-            inputs = 
-              d.inputs.map(function(input,i){
-                obj = 
-                  { 'total' : d.inputs.length,
-                    'index' : i,
-                    'parent' : d,
-                    'name' : input.name,
-                    'type' : input.type,
-                    'io'   : 'input'};
-                return obj;
-              })
-            return inputs;
-          }, function(d){ return d.name + d.type;})
-          .enter()
-          .append('circle')
-            .attr('class','input')
-            .attr('r', ioRadius)
-            .attr('fill', inputColor)
-            .attr('stroke', nodeStrokeColor)
-            .attr('stroke-width', nodeStrokeWidth);
-            //.call(drawLine);
+      
+      inputGroup =
+        nodeGroup.selectAll('.inputGroup') 
+            .data(function(d,i){
+              // Extra information is needed to calculate
+              // where the inputs should be placed
+              inputs = 
+                d.inputs.map(function(input,i){
+                  obj = 
+                    { 'total' : d.inputs.length,
+                      'index' : i,
+                      'parent' : d,
+                      'name' : input.name,
+                      'type' : input.type,
+                      'io'   : 'input'};
+                  return obj;
+                })
+              return inputs;
+            }, function(d){ return d.name + "." + d.type; });
+      inputGroup
+            .enter()
+            .append('circle')
+              .attr('class','input')
+              .attr('r', ioRadius)
+              .attr('fill', inputColor)
+              .attr('stroke', nodeStrokeColor)
+              .attr('stroke-width', nodeStrokeWidth);
 
       // Add output group
       nodeGroup.selectAll('.outputGroup')
@@ -878,7 +954,7 @@ d3.json('/data/testData.json',function(error,json){
 
 
         // Move Input Links
-        nodeGroup.selectAll('.input')
+        nodeGroup.selectAll('.input') 
           .attr('id',function(d){ return d.name + '.' + d.type })
           .attr('cx' , function(d) { return Math.cos(calcRad(d)) * nodeRadius; })
           .attr('cy' , function(d) { return Math.sin(calcRad(d)) * nodeRadius; });
@@ -927,7 +1003,5 @@ d3.json('/data/testData.json',function(error,json){
     this.init();
   }
 
-  // Some test data
-  //shaderBits.buildShader({"test"},{"test"});
   var graph = new Graph();
 });
